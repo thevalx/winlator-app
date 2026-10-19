@@ -35,7 +35,7 @@ jobs:
             exit 1
           fi
           if [ ! -f "$directory/debug.keystore" ]; then
-            keytool -genkeypair -keystore "$directory/debug.keystore" -storetype JKS -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Winlator +trig Test, O=Winlator +trig, C=US'
+            keytool -genkeypair -keystore "$directory/debug.keystore" -storetype JKS -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Winlator trig Test, O=Winlator trig, C=US'
             chmod 600 "$directory/debug.keystore"
           fi
           keytool -exportcert -keystore "$directory/debug.keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > TEST-SIGNING-CERTIFICATE.txt
