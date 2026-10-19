@@ -1,0 +1,51 @@
+name: Winlator +trig test APK
+
+on:
+  push:
+    branches: ['feat/trigger-modes']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install official build tool versions
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;24.0.8215888' 'cmake;3.22.1'
+      - name: Trigger regression checks
+        run: python3 tests/trigger_modes/run.py
+      - name: Preserve test APK signing key between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: winlator-trig-test-keystore-v1
+      - name: Build APK with official runtime assets and native sources
+        run: bash gradlew --no-daemon --max-workers=2 assembleDebug
+      - name: Verify identity and APK signature
+        shell: bash
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > apk-badging.txt
+          grep -F "package: name='com.winlator.trig'" apk-badging.txt
+          grep -F "application-label:'Winlator +trig'" apk-badging.txt
+          cp "$APK" 'Winlator-plus-trig.apk'
+          sha256sum 'Winlator-plus-trig.apk' > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-plus-trig
+          path: |
+            Winlator-plus-trig.apk
+            SHA256SUMS.txt
+            apk-badging.txt
+          compression-level: 0
+          retention-days: 30

@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="trigger_mode_entries">
+        <item>As Button</item>
+        <item>As Axis</item>
+        <item>Both</item>
+    </string-array>
+    <string-array name="shortcut_trigger_mode_entries">
+        <item>@string/trigger_mode_global</item>
+        <item>As Button</item>
+        <item>As Axis</item>
+        <item>Both</item>
+    </string-array>
     <string-array name="screen_size_entries">
         <item>@string/custom</item>
         <item>@string/native_resolution</item>

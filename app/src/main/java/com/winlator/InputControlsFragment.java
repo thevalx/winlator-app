@@ -36,6 +36,7 @@ import com.winlator.core.HttpUtils;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.InputControlsManager;
+import com.winlator.inputcontrols.TriggerMode;
 import com.winlator.widget.InputControlsView;
 import com.winlator.widget.SeekBar;
 
@@ -131,6 +132,18 @@ public class InputControlsFragment extends Fragment {
         SeekBar sbOverlayOpacity = view.findViewById(R.id.SBOverlayOpacity);
         sbOverlayOpacity.setOnValueChangeListener((seekBar, value) -> preferences.edit().putFloat("overlay_opacity", value / 100.0f).apply());
         sbOverlayOpacity.setValue(preferences.getFloat("overlay_opacity", InputControlsView.DEFAULT_OVERLAY_OPACITY) * 100);
+
+        final Spinner sTriggerMode = view.findViewById(R.id.STriggerMode);
+        sTriggerMode.setSelection(TriggerMode.normalize(preferences.getInt("trigger_type", TriggerMode.DEFAULT)));
+        sTriggerMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) {
+                preferences.edit().putInt("trigger_type", position).apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
 
         view.findViewById(R.id.BTAddProfile).setOnClickListener((v) -> ContentDialog.prompt(context, R.string.profile_name, null, (name) -> {
             currentProfile = manager.createProfile(name);

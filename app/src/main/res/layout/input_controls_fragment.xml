@@ -79,6 +79,17 @@
             app:minValue="10"
             app:maxValue="100" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/trigger_mode" />
+
+        <Spinner
+            style="@style/ComboBox"
+            android:id="@+id/STriggerMode"
+            android:layout_width="match_parent"
+            android:entries="@array/trigger_mode_entries" />
+
         <CheckBox
             android:id="@+id/CBDisableMouseInput"
             android:layout_width="wrap_content"

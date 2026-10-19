@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Winlator</string>
+    <string name="app_name" translatable="false">Winlator +trig</string>
+    <string name="trigger_mode">Trigger Mode</string>
+    <string name="trigger_mode_global">Use global setting</string>
     <string name="run">Run</string>
     <string name="edit">Edit</string>
     <string name="remove">Remove</string>

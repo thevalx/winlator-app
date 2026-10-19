@@ -24,10 +24,15 @@ public class GamepadState {
     }
 
     public void setPressed(int buttonIdx, boolean pressed) {
-        if (buttonIdx == ExternalController.IDX_BUTTON_L2) {
+        setPressed(buttonIdx, pressed, true);
+    }
+
+    /** External analog triggers can update their button bits without replacing the axes. */
+    public void setPressed(int buttonIdx, boolean pressed, boolean updateTriggerValue) {
+        if (updateTriggerValue && buttonIdx == ExternalController.IDX_BUTTON_L2) {
             triggerL = pressed ? 1.0f : 0.0f;
         }
-        else if (buttonIdx == ExternalController.IDX_BUTTON_R2) {
+        else if (updateTriggerValue && buttonIdx == ExternalController.IDX_BUTTON_R2) {
             triggerR = pressed ? 1.0f : 0.0f;
         }
         int flag = 1<<buttonIdx;

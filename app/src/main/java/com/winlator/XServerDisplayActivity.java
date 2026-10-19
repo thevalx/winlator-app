@@ -65,6 +65,7 @@ import com.winlator.core.WineUtils;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.InputControlsManager;
+import com.winlator.inputcontrols.TriggerMode;
 import com.winlator.math.Mathf;
 import com.winlator.renderer.GLRenderer;
 import com.winlator.services.ForegroundService;
@@ -194,6 +195,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             String shortcutPath = getIntent().getStringExtra("shortcut_path");
             if (shortcutPath != null && !shortcutPath.isEmpty()) shortcut = new Shortcut(container, new File(shortcutPath));
+
+            winHandler.gamepadHandler.setTriggerType(TriggerMode.resolve(
+                shortcut != null ? shortcut.getExtra("triggerType") : null,
+                preferences.getInt("trigger_type", TriggerMode.DEFAULT)));
 
             String graphicsDriver = container.getGraphicsDriver();
             audioDriver = container.getAudioDriver();

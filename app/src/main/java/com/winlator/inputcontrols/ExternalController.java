@@ -36,7 +36,21 @@ public class ExternalController implements GamepadSlot {
     private final ArrayList<ExternalControllerBinding> controllerBindings = new ArrayList<>();
     private final GamepadState state = new GamepadState();
     private GamepadVibration vibration;
-    private boolean processTriggerButtonOnMotionEvent = true;
+    private int triggerType = TriggerMode.DEFAULT;
+    private float triggerAxisL;
+    private float triggerAxisR;
+    private boolean triggerButtonL;
+    private boolean triggerButtonR;
+
+    public void setTriggerType(int triggerType) {
+        triggerType = TriggerMode.normalize(triggerType);
+        if (this.triggerType == triggerType) return;
+        this.triggerType = triggerType;
+        triggerAxisL = triggerAxisR = 0;
+        triggerButtonL = triggerButtonR = false;
+        state.setPressed(IDX_BUTTON_L2, false);
+        state.setPressed(IDX_BUTTON_R2, false);
+    }
 
     @Override
     public String getName() {
@@ -173,13 +187,25 @@ public class ExternalController implements GamepadSlot {
     }
 
     private void processTriggerButton(MotionEvent event) {
-        state.triggerL = Mathf.clamp(Math.max(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE)) - Mathf.EPSILON, 0.0f, 1.0f);
-        state.triggerR = Mathf.clamp(Math.max(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS)) - Mathf.EPSILON, 0.0f, 1.0f);
+        triggerAxisL = Mathf.clamp(Math.max(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE)) - Mathf.EPSILON, 0.0f, 1.0f);
+        triggerAxisR = Mathf.clamp(Math.max(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS)) - Mathf.EPSILON, 0.0f, 1.0f);
+        updateTriggers();
+    }
+
+    private void updateTriggers() {
+        state.triggerL = triggerAxisL;
+        state.triggerR = triggerAxisR;
+        // Keep Android's key state and synthesize buttons for axis-only devices.
+        // The separate raw axes make release order independent of key/motion order.
+        boolean buttons = triggerType != TriggerMode.AS_AXIS;
+        boolean digital = triggerType == TriggerMode.AS_BUTTON;
+        state.setPressed(IDX_BUTTON_L2, buttons && (triggerButtonL || triggerAxisL > 0.5f), digital);
+        state.setPressed(IDX_BUTTON_R2, buttons && (triggerButtonR || triggerAxisR > 0.5f), digital);
     }
 
     public boolean updateStateFromMotionEvent(MotionEvent event) {
         if (isJoystickDevice(event)) {
-            if (processTriggerButtonOnMotionEvent) processTriggerButton(event);
+            processTriggerButton(event);
             int historySize = event.getHistorySize();
             for (int i = 0; i < historySize; i++) processJoystickInput(event, i);
             processJoystickInput(event, -1);
@@ -193,7 +219,13 @@ public class ExternalController implements GamepadSlot {
         int keyCode = event.getKeyCode();
         int buttonIdx = getButtonIdxByKeyCode(keyCode);
         if (buttonIdx != -1) {
-            if (buttonIdx == IDX_BUTTON_L2 || buttonIdx == IDX_BUTTON_R2) processTriggerButtonOnMotionEvent = false;
+            if (buttonIdx == IDX_BUTTON_L2 || buttonIdx == IDX_BUTTON_R2) {
+                // Android often sends both a key and an axis for the same trigger.
+                if (buttonIdx == IDX_BUTTON_L2) triggerButtonL = pressed;
+                else triggerButtonR = pressed;
+                updateTriggers();
+                return true;
+            }
             state.setPressed(buttonIdx, pressed);
             return true;
         }

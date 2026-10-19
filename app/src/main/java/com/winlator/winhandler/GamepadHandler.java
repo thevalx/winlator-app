@@ -15,6 +15,7 @@ import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.GamepadSlot;
 import com.winlator.inputcontrols.GamepadState;
 import com.winlator.inputcontrols.GamepadVibration;
+import com.winlator.inputcontrols.TriggerMode;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,6 +37,8 @@ public class GamepadHandler {
     private final WinHandler winHandler;
     private final List<Integer> gamepadClients = new CopyOnWriteArrayList<>();
     private byte dinputMapperType = DINPUT_MAPPER_TYPE_XINPUT;
+    private int triggerType = TriggerMode.DEFAULT;
+
     private final GamepadSlot[] gamepadSlots = new GamepadSlot[GAMEPAD_MAX_COUNT];
     private final ArrayList<ExternalController> connectedControllers = new ArrayList<>(GAMEPAD_MAX_COUNT);
     private GamepadPlayerConfig[] gamepadPlayerConfigs;
@@ -96,6 +99,7 @@ public class GamepadHandler {
 
         synchronized (connectedControllers) {
             ExternalController.updateConnectedControllers(connectedControllers);
+            for (ExternalController controller : connectedControllers) controller.setTriggerType(triggerType);
         }
 
         boolean autoAssign = true;
@@ -305,6 +309,13 @@ public class GamepadHandler {
 
     public void setDInputMapperType(byte dinputMapperType) {
         this.dinputMapperType = dinputMapperType;
+    }
+
+    public void setTriggerType(int triggerType) {
+        this.triggerType = TriggerMode.normalize(triggerType);
+        synchronized (connectedControllers) {
+            for (ExternalController controller : connectedControllers) controller.setTriggerType(this.triggerType);
+        }
     }
 
     public static ArrayList<GamepadModel> loadGamepadModels(Context context) {

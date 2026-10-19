@@ -25,6 +25,7 @@ import com.winlator.core.StringUtils;
 import com.winlator.core.WineUtils;
 import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.InputControlsManager;
+import com.winlator.inputcontrols.TriggerMode;
 import com.winlator.widget.EnvVarsView;
 import com.winlator.win32.MSLink;
 import com.winlator.win32.PEParser;
@@ -87,6 +88,10 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
         final Spinner sControlsProfile = findViewById(R.id.SControlsProfile);
         loadControlsProfileSpinner(sControlsProfile, shortcut.getExtra("controlsProfile", "0"));
+
+        final Spinner sTriggerMode = findViewById(R.id.STriggerMode);
+        String triggerOverride = shortcut.getExtra("triggerType");
+        sTriggerMode.setSelection(triggerOverride.matches("[0-2]") ? TriggerMode.resolve(triggerOverride, TriggerMode.DEFAULT) + 1 : 0);
 
         final Spinner sDInputMapperType = findViewById(R.id.SDInputMapperType);
         sDInputMapperType.setSelection(Byte.parseByte(shortcut.getExtra("dinputMapperType", String.valueOf(GamepadHandler.DINPUT_MAPPER_TYPE_XINPUT))));
@@ -162,6 +167,9 @@ public class ShortcutSettingsDialog extends ContentDialog {
             ArrayList<ControlsProfile> profiles = inputControlsManager.getProfiles(true);
             int controlsProfile = sControlsProfile.getSelectedItemPosition() > 0 ? profiles.get(sControlsProfile.getSelectedItemPosition()-1).id : 0;
             shortcut.putExtra("controlsProfile", controlsProfile > 0 ? String.valueOf(controlsProfile) : null);
+
+            int triggerPosition = sTriggerMode.getSelectedItemPosition();
+            shortcut.putExtra("triggerType", triggerPosition > 0 ? String.valueOf(triggerPosition - 1) : null);
 
             int dinputMapperType = sDInputMapperType.getSelectedItemPosition();
             shortcut.putExtra("dinputMapperType", dinputMapperType != GamepadHandler.DINPUT_MAPPER_TYPE_XINPUT ? String.valueOf(dinputMapperType) : null);
