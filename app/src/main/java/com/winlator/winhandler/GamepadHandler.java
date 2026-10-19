@@ -307,6 +307,36 @@ public class GamepadHandler {
         return dinputMapperType;
     }
 
+    public void releaseAllControllerInputs() {
+        synchronized (connectedControllers) {
+            for (ExternalController controller : connectedControllers) {
+                controller.resetState();
+            }
+        }
+        ControlsProfile profile = winHandler.activity.getInputControlsView().getProfile();
+        if (profile != null) {
+            profile.getGamepadState().copy(new GamepadState());
+        }
+        if (!winHandler.initReceived || gamepadClients.isEmpty()) return;
+        // Release every assigned slot, even when an ordinary state packet is already queued.
+        // Use snapshots so subsequent input cannot turn a queued release back into a press.
+        for (byte index = 0; index < GAMEPAD_MAX_COUNT; index++) {
+            if (gamepadSlots[index] == null) continue;
+            final byte slot = index;
+            final GamepadState neutral = new GamepadState();
+            for (final int port : gamepadClients) {
+                winHandler.addAction(() -> {
+                    final ByteBuffer buffer = winHandler.sendData;
+                    buffer.rewind();
+                    buffer.put(RequestCodes.GET_GAMEPAD_STATE);
+                    buffer.put(slot);
+                    writeStateToBuffer(buffer, neutral);
+                    winHandler.sendPacket(port);
+                });
+            }
+        }
+    }
+
     public void setDInputMapperType(byte dinputMapperType) {
         this.dinputMapperType = dinputMapperType;
     }

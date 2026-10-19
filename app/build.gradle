@@ -8,8 +8,8 @@ android {
         applicationId 'com.winlator.trig'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 33
-        versionName "11.2"
+        versionCode 34
+        versionName "11.2+trig.2"
 
         externalNativeBuild {
             cmake {
@@ -37,6 +37,14 @@ android {
         checkReleaseBuilds false
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            systemProperty 'user.home', System.getProperty('user.home')
+            systemProperty 'winlator.preview.dir', System.getProperty('winlator.preview.dir', '')
+        }
+    }
+
     ndkVersion '24.0.8215888'
 
     externalNativeBuild {
@@ -48,6 +56,8 @@ android {
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
     implementation 'androidx.appcompat:appcompat:1.4.0'
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'com.google.android.material:material:1.4.0'

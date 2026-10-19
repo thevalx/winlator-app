@@ -18,6 +18,7 @@ import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.Spinner;
+import android.widget.PopupMenu;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -46,6 +47,7 @@ import com.winlator.contentdialog.VirGLConfigDialog;
 import com.winlator.contentdialog.WineD3DConfigDialog;
 import com.winlator.core.AppUtils;
 import com.winlator.core.DefaultVersion;
+import com.winlator.core.ControllerMenuInputGate;
 import com.winlator.core.EnvVars;
 import com.winlator.core.FileUtils;
 import com.winlator.core.GeneralComponents;
@@ -70,6 +72,8 @@ import com.winlator.math.Mathf;
 import com.winlator.renderer.GLRenderer;
 import com.winlator.services.ForegroundService;
 import com.winlator.widget.FrameRating;
+import com.winlator.widget.InGameMenuView;
+import com.winlator.widget.PerformanceHudView;
 import com.winlator.widget.InputControlsView;
 import com.winlator.widget.MagnifierView;
 import com.winlator.widget.TouchpadView;
@@ -93,6 +97,9 @@ import com.winlator.xserver.ScreenInfo;
 import com.winlator.xserver.Window;
 import com.winlator.xserver.WindowManager;
 import com.winlator.xserver.XServer;
+import com.winlator.xserver.Keyboard;
+import com.winlator.xserver.Pointer;
+import com.winlator.xserver.XLock;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -114,6 +121,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private InputControlsManager inputControlsManager;
     private RootFS rootFS;
     private FrameRating frameRating;
+    private PerformanceHudView performanceHud;
+    private InGameMenuView inGameMenu;
+    private final ControllerMenuInputGate menuInputGate = new ControllerMenuInputGate();
+    private volatile boolean hudEnabled;
+    private boolean hostResumed;
     private Runnable editInputControlsCallback;
     private Shortcut shortcut;
     private String[] graphicsDriver = {GraphicsDrivers.DEFAULT_VULKAN_DRIVER, GraphicsDrivers.DEFAULT_OPENGL_DRIVER};
@@ -156,13 +168,35 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         drawerLayout.setOnApplyWindowInsetsListener((view, windowInsets) -> windowInsets.replaceSystemWindowInsets(0, 0, 0, 0));
         drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
 
-        NavigationView navigationView = findViewById(R.id.NavigationView);
         ProcessHelper.removeAllDebugCallbacks();
         boolean enableLogs = preferences.getBoolean("enable_wine_debug", false) || preferences.getInt("box64_logs", 0) >= 1;
         if (enableLogs) ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
-        Menu menu = navigationView.getMenu();
+        Menu menu = new PopupMenu(this, drawerLayout).getMenu();
+        getMenuInflater().inflate(R.menu.xserver_menu, menu);
         menu.findItem(R.id.menu_item_logs).setVisible(enableLogs);
-        navigationView.setNavigationItemSelectedListener(this);
+        FrameLayout menuContainer = findViewById(R.id.InGameMenuContainer);
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        float density = getResources().getDisplayMetrics().density;
+        menuContainer.getLayoutParams().width = Math.min(screenWidth - (int)(48 * density),
+            Math.max((int)(320 * density), Math.min((int)(420 * density), (int)(screenWidth * 0.42f))));
+        inGameMenu = new InGameMenuView(this, menu, this);
+        inGameMenu.setResumeAction(() -> drawerLayout.closeDrawers());
+        menuContainer.addView(inGameMenu);
+        drawerLayout.setScrimColor(0x99000000);
+        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
+            @Override public void onDrawerOpened(@NonNull View drawerView) {
+                releaseGameInputs();
+                menuInputGate.onMenuOpened();
+                if (inputControlsView != null) inputControlsView.releasePointerCapture();
+                if (touchpadView != null) touchpadView.releasePointerCapture();
+                inGameMenu.onMenuOpened();
+                inGameMenu.requestFocus();
+            }
+            @Override public void onDrawerClosed(@NonNull View drawerView) {
+                inGameMenu.onMenuClosed();
+                restoreGamePointerCapture();
+            }
+        });
 
         rootFS = RootFS.find(this);
 
@@ -244,7 +278,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         xServer.windowManager.addOnWindowModificationListener(new WindowManager.OnWindowModificationListener() {
             @Override
             public void onUpdateWindowContent(Window window) {
-                if (window.id == frameRatingWindowId) frameRating.update();
+                if (hudEnabled && frameRating != null && window.id == frameRatingWindowId) frameRating.update();
             }
 
             @Override
@@ -302,8 +336,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
 
+        if (!hasFocus) {
+            menuInputGate.onFocusLost();
+            if (inputControlsView != null) inputControlsView.onInputFocusLost();
+            releaseGameInputs();
+        }
+
         if (hasFocus) {
-            if (capturePointerOnExternalMouse) {
+            if (capturePointerOnExternalMouse && inputControlsView != null && touchpadView != null && !isInGameMenuOpen()) {
                 // Captured events are delivered to the focused view.
                 View captureView = inputControlsView.getVisibility() == View.VISIBLE ? inputControlsView : touchpadView;
                 if (captureView.requestFocus()) captureView.requestPointerCapture();
@@ -321,6 +361,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onResume() {
         super.onResume();
+        hostResumed = true;
+        if (performanceHud != null) performanceHud.start();
+        if (inGameMenu != null) inGameMenu.onHostResumed();
         if (environment != null) {
             xServerView.onResume();
             environment.onResume();
@@ -330,6 +373,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onPause() {
+        hostResumed = false;
+        if (performanceHud != null) performanceHud.stop();
+        if (inGameMenu != null) inGameMenu.onHostStopped();
+        menuInputGate.onFocusLost();
+        if (inputControlsView != null) inputControlsView.onInputFocusLost();
+        releaseGameInputs();
         ForegroundService.onPauseSession(this);
         super.onPause();
         if (environment != null && !isInPictureInPictureMode()) {
@@ -346,6 +395,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        if (performanceHud != null) performanceHud.stop();
+        if (inGameMenu != null) inGameMenu.onMenuClosed();
         winHandler.stop();
         if (environment != null) environment.stopEnvironmentComponents();
         ForegroundService.stopSession(this);
@@ -354,12 +405,67 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onBackPressed() {
+        toggleInGameMenu();
+    }
+
+    private boolean isInGameMenuOpen() {
+        return drawerLayout != null && (drawerLayout.isDrawerOpen(GravityCompat.START) ||
+            drawerLayout.isDrawerVisible(GravityCompat.START));
+    }
+
+    public void toggleInGameMenu() {
         if (environment != null) {
-            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            if (!isInGameMenuOpen()) {
+                releaseGameInputs();
+                menuInputGate.onMenuOpened();
+                if (inputControlsView != null) inputControlsView.releasePointerCapture();
+                if (touchpadView != null) touchpadView.releasePointerCapture();
                 drawerLayout.openDrawer(GravityCompat.START);
+                inGameMenu.requestFocus();
             }
             else drawerLayout.closeDrawers();
         }
+    }
+
+    private void releaseGameInputs() {
+        if (inputControlsView == null) return;
+        inputControlsView.releaseActiveInputs();
+        winHandler.gamepadHandler.releaseAllControllerInputs();
+        if (xServer != null) {
+            try (XLock lock = xServer.lock(XServer.Lockable.WINDOW_MANAGER, XServer.Lockable.INPUT_DEVICE)) {
+                for (int code = Keyboard.MIN_KEYCODE; code <= Keyboard.MAX_KEYCODE; code++) {
+                    xServer.keyboard.setKeyRelease((byte)code);
+                }
+                for (Pointer.Button button : Pointer.Button.values()) {
+                    if (xServer.pointer.isButtonPressed(button)) xServer.injectPointerButtonRelease(button);
+                }
+            }
+        }
+    }
+
+    private void restoreGamePointerCapture() {
+        if (inputControlsView == null || touchpadView == null || !hostResumed || !capturePointerOnExternalMouse) return;
+        View captureView = inputControlsView.getVisibility() == View.VISIBLE ? inputControlsView : touchpadView;
+        if (captureView.requestFocus()) captureView.requestPointerCapture();
+    }
+
+    private void refreshHudSettings() {
+        if (performanceHud == null || frameRating == null) return;
+        boolean containerEnabled = container != null && container.getHUDMode() != FrameRating.Mode.DISABLED.ordinal();
+        boolean wasEnabled = hudEnabled;
+        hudEnabled = performanceHud.isEnabled(containerEnabled);
+        performanceHud.refreshSettings();
+        boolean modern = performanceHud.isModernStyle();
+        int mode = container != null ? container.getHUDMode() : FrameRating.Mode.SIMPLE.ordinal();
+        if (mode < FrameRating.Mode.SIMPLE.ordinal() || mode >= FrameRating.Mode.values().length) mode = FrameRating.Mode.SIMPLE.ordinal();
+        frameRating.setMode(modern ? FrameRating.Mode.SIMPLE : FrameRating.Mode.values()[mode]);
+        frameRating.setOverlayEnabled(hudEnabled && !modern);
+        if (hudEnabled && !wasEnabled) {
+            frameRating.reset();
+            performanceHud.setFps(Float.NaN);
+        }
+        frameRating.setVisibility(hudEnabled && !modern && frameRatingWindowId != -1 ? View.VISIBLE : View.GONE);
+        if (hostResumed) performanceHud.start();
     }
 
     @Override
@@ -602,7 +708,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         touchpadView.setSensitivity(globalCursorSpeed);
         touchpadView.setMoveCursorToTouchpoint(preferences.getBoolean("move_cursor_to_touchpoint", false));
         touchpadView.setFourFingersTapCallback(() -> {
-            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.openDrawer(GravityCompat.START);
+            if (!isInGameMenuOpen()) toggleInGameMenu();
         });
         rootView.addView(touchpadView);
 
@@ -614,15 +720,20 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 touchpadView.isEnabled() && touchpadView.onCapturedPointer(view, event));
         }
         inputControlsView.setXServer(xServer);
+        inputControlsView.setOnOpenMenu(this::toggleInGameMenu);
         inputControlsView.setVisibility(View.GONE);
         rootView.addView(inputControlsView);
 
-        if (container != null && container.getHUDMode() != FrameRating.Mode.DISABLED.ordinal()) {
-            frameRating = new FrameRating(this);
-            frameRating.setMode(FrameRating.Mode.values()[container.getHUDMode()]);
-            frameRating.setVisibility(View.GONE);
-            rootView.addView(frameRating);
-        }
+        frameRating = new FrameRating(this);
+        frameRating.setVisibility(View.GONE);
+        rootView.addView(frameRating);
+        performanceHud = new PerformanceHudView(this, preferences);
+        performanceHud.setRendererInfo(graphicsDriver[0] + " / " + graphicsDriver[1]);
+        frameRating.setOnFpsListener(performanceHud::setFps);
+        FrameLayout.LayoutParams hudParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        rootView.addView(performanceHud, hudParams);
+        refreshHudSettings();
+        inGameMenu.setHudSettingsView(performanceHud.createSettingsView(this::refreshHudSettings));
 
         if (shortcut != null) {
             String controlsProfile = shortcut.getExtra("controlsProfile");
@@ -801,11 +912,24 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (isInGameMenuOpen()) {
+            if (ExternalController.isJoystickDevice(event)) return true;
+            return super.dispatchGenericMotionEvent(event);
+        }
         return !winHandler.onGenericMotionEvent(event) && !touchpadView.onExternalMouseEvent(event) && super.dispatchGenericMotionEvent(event);
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (inputControlsView != null && inputControlsView.handleMenuKeyEvent(event)) return true;
+        boolean controllerEvent = ExternalController.isGameController(event.getDevice());
+        boolean menuOpen = isInGameMenuOpen();
+        if (menuInputGate.shouldBlock(event.getAction(), event.getKeyCode(), event.getRepeatCount(),
+                event.getDeviceId(), controllerEvent, menuOpen)) {
+            if (menuOpen) return super.dispatchKeyEvent(event);
+            return true;
+        }
+        if (menuOpen || inputControlsView == null) return super.dispatchKeyEvent(event);
         return (!inputControlsView.onKeyEvent(event) && !winHandler.onKeyEvent(event) && xServer.keyboard.onKeyEvent(event)) ||
                (!ExternalController.isGameController(event.getDevice()) && super.dispatchKeyEvent(event));
     }
@@ -1122,11 +1246,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 }
                 frameRatingWindowId = frameRatingWindow.id;
                 frameRating.reset();
+                if (performanceHud != null) runOnUiThread(() -> performanceHud.setFps(Float.NaN));
             }
         }
         else if (window.id == frameRatingWindowId) {
             frameRatingWindowId = -1;
             runOnUiThread(() -> frameRating.setVisibility(View.GONE));
+            if (performanceHud != null) runOnUiThread(() -> performanceHud.setFps(Float.NaN));
         }
     }
 

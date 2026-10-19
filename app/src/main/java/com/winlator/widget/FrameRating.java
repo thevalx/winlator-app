@@ -19,6 +19,7 @@ import java.util.Locale;
 
 public class FrameRating extends FrameLayout implements Runnable {
     public enum Mode {DISABLED, SIMPLE, FULL}
+    public interface OnFpsListener { void onFps(float fps); }
     private long lastTime = 0;
     private short frameCount = 0;
     private float lastFPS = 0;
@@ -31,6 +32,8 @@ public class FrameRating extends FrameLayout implements Runnable {
     private ActivityManager.MemoryInfo memoryInfo;
     private String cpuInfo = null;
     private byte tick = 0;
+    private OnFpsListener onFpsListener;
+    private boolean overlayEnabled = true;
 
     public FrameRating(Context context) {
         this(context, null);
@@ -89,6 +92,19 @@ public class FrameRating extends FrameLayout implements Runnable {
         return mode;
     }
 
+    public float getLastFPS() {
+        return lastFPS;
+    }
+
+    public void setOnFpsListener(OnFpsListener listener) {
+        onFpsListener = listener;
+    }
+
+    public void setOverlayEnabled(boolean enabled) {
+        overlayEnabled = enabled;
+        if (!enabled) setVisibility(GONE);
+    }
+
     public void setMode(Mode mode) {
         this.mode = mode;
         setupPanels();
@@ -119,8 +135,9 @@ public class FrameRating extends FrameLayout implements Runnable {
 
     @Override
     public void run() {
-        if (getVisibility() == GONE) setVisibility(View.VISIBLE);
+        if (overlayEnabled && getVisibility() == GONE) setVisibility(View.VISIBLE);
         ((TextView)fpsPanel.getChildAt(1)).setText(String.format(Locale.ENGLISH, "%.1f", lastFPS));
+        if (onFpsListener != null) onFpsListener.onFps(lastFPS);
 
         if (mode == Mode.FULL && ++tick >= 2) {
             tick = 0;

@@ -89,6 +89,28 @@ public class TriggerModesTest {
         digital.setTriggerType(TriggerMode.AS_BUTTON);
         key(digital, true, true); close(digital.getGamepadState().triggerL, 1);
         key(digital, true, false); close(digital.getGamepadState().triggerL, 0);
+        for (int mode = 0; mode <= 2; mode++) {
+            ExternalController c = new ExternalController();
+            c.setTriggerType(mode);
+            motion(c, .8f, .9f, false);
+            key(c, true, true); key(c, false, true);
+            GamepadState state = c.getGamepadState();
+            state.thumbLX = .7f; state.thumbLY = -.6f;
+            state.thumbRX = -.3f; state.thumbRY = .4f;
+            state.dpad[0] = state.dpad[2] = true;
+            c.resetState();
+            check(state.buttons == 0, "menu release neutralizes buttons");
+            close(state.triggerL, 0); close(state.triggerR, 0);
+            close(state.thumbLX, 0); close(state.thumbLY, 0);
+            close(state.thumbRX, 0); close(state.thumbRY, 0);
+            check(state.getPovHat() == -1, "menu release neutralizes D-pad");
+            // Late trigger-up after focus loss cannot resurrect the previous raw travel.
+            key(c, true, false); key(c, false, false);
+            close(state.triggerL, 0); close(state.triggerR, 0);
+            motion(c, .25f, .75f, false);
+            close(state.triggerL, mode == TriggerMode.AS_BUTTON ? 0 : .25f);
+            close(state.triggerR, mode == TriggerMode.AS_BUTTON ? 1 : .75f);
+        }
         GamepadState virtual = new GamepadState();
         virtual.setPressed(ExternalController.IDX_BUTTON_L2, true); close(virtual.triggerL, 1);
         virtual.setPressed(ExternalController.IDX_BUTTON_L2, false); close(virtual.triggerL, 0);

@@ -35,13 +35,20 @@ jobs:
             sudo apt-get install -y zstd
           fi
           python3 tests/runtime_paths/run.py
+      - name: HUD and controller menu regression checks
+        run: |
+          python3 tests/hud/run.py
+          python3 tests/menu_binding/run.py
+          python3 tests/menu_release/run.py
+      - name: Android UI tests
+        run: bash gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx4g :app:testDebugUnitTest
       - name: Preserve test APK signing key between builds
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
           key: winlator-trig-test-keystore-v1
       - name: Build APK with official runtime assets and native sources
-        run: bash gradlew --no-daemon --max-workers=2 assembleDebug
+        run: bash gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx4g assembleDebug
       - name: Verify identity and APK signature
         shell: bash
         run: |
@@ -81,14 +88,18 @@ jobs:
           sha256sum --check SHA256SUMS.txt
           tag="trig-test-${COMMIT:0:7}"
           cat > release-notes.md <<'NOTES'
-          Winlator +trig test APK for ARM64 Android. Installs as com.winlator.trig alongside official Winlator.
+          Winlator +trig prerelease 2 for ARM64 Android. Updates the first +trig release and remains separate from official Winlator.
 
-          Download Winlator-plus-trig.apk below directly on your phone. Axis mode is the default; Button and Both are available globally and per shortcut.
+          Download Winlator-plus-trig.apk below directly on your phone.
+
+          New in prerelease 2: a dark in-game sidebar, configurable Modern HUD, and an opt-in Winlator → Open in-game menu action in existing controller profile bindings. Assign it to BUTTON MODE on your GameSir G8+ if desired; no button is captured by default.
+
+          Trigger modes remain available globally and per shortcut. Runtime assets, renderer defaults and gamepad transport are preserved.
 
           Trigger regression checks, runtime identity checks, APK build and signature/identity verification passed in this workflow. Physical controller behavior and game FPS still require phone testing.
           NOTES
           if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" Winlator-plus-trig.apk SHA256SUMS.txt apk-badging.txt --repo "$REPOSITORY" --clobber
           else
-            gh release create "$tag" Winlator-plus-trig.apk SHA256SUMS.txt apk-badging.txt --repo "$REPOSITORY" --target "$COMMIT" --prerelease --title "Winlator +trig test ${COMMIT:0:7}" --notes-file release-notes.md
+            gh release create "$tag" Winlator-plus-trig.apk SHA256SUMS.txt apk-badging.txt --repo "$REPOSITORY" --target "$COMMIT" --prerelease --title "Winlator +trig prerelease 2 (${COMMIT:0:7})" --notes-file release-notes.md
           fi

@@ -42,6 +42,13 @@ public class ExternalController implements GamepadSlot {
     private boolean triggerButtonL;
     private boolean triggerButtonR;
 
+    /** Neutralize local input when Android's in-game menu takes controller focus. */
+    public void resetState() {
+        triggerAxisL = triggerAxisR = 0;
+        triggerButtonL = triggerButtonR = false;
+        state.copy(new GamepadState());
+    }
+
     public void setTriggerType(int triggerType) {
         triggerType = TriggerMode.normalize(triggerType);
         if (this.triggerType == triggerType) return;

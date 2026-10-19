@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ingame_desktop">Desktop</string>
+    <string name="ingame_settings">Settings</string>
+    <string name="ingame_input">Input</string>
+    <string name="ingame_hud">HUD</string>
+    <string name="ingame_resume">Resume game</string>
+    <string name="ingame_session">SESSION</string>
+    <string name="ingame_display">DISPLAY</string>
+    <string name="ingame_tools">TOOLS</string>
+    <string name="ingame_controller">CONTROLLER MENU BUTTON</string>
+    <string name="ingame_controller_help">Edit your Input Controls profile → External Controllers → your controller → BUTTON MODE (or another button). Choose Winlator → Open in-game menu. Activate that profile to use the binding.</string>
+    <string name="ingame_cpu">CPU</string>
+    <string name="ingame_memory">Memory</string>
+    <string name="ingame_cpu_cores">%1$d cores</string>
+    <string name="ingame_process_count">Processes: %1$d</string>
+    <string name="ingame_process_pid">PID: %1$d</string>
+    <string name="ingame_process_actions">Actions for %1$s</string>
+    <string name="ingame_processes_waiting">Waiting for processes…</string>
+    <string name="ingame_no_processes">No Windows processes available.</string>
+    <string name="ingame_unavailable">Unavailable</string>
+    <string name="ingame_cpu_unavailable">CPU usage unavailable on this device.</string>
+    <string name="ingame_memory_usage">%1$s / %2$s</string>
+    <string name="ingame_task_actions">PROCESS TOOLS</string>
+</resources>

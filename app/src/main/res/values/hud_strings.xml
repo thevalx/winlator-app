@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hud_enable">Enable HUD</string>
+    <string name="hud_style">Style</string>
+    <string name="hud_modern">Modern</string>
+    <string name="hud_classic">Classic</string>
+    <string name="hud_appearance">APPEARANCE</string>
+    <string name="hud_fps">FPS</string>
+    <string name="hud_renderer">Renderer</string>
+    <string name="hud_gpu_usage">GPU Usage</string>
+    <string name="hud_gpu_name">GPU Name</string>
+    <string name="hud_cpu_usage">CPU Usage</string>
+    <string name="hud_cpu_temperature">CPU Temp</string>
+    <string name="hud_ram">RAM</string>
+    <string name="hud_power">Battery Power</string>
+    <string name="hud_battery_temperature">Battery Temp</string>
+    <string name="hud_metrics_note">Modern HUD updates once per second. N/A means Android does not expose that sensor. CPU app measures only Winlator when total CPU is restricted. Power is total battery draw or charge, not game power. Classic uses the original Winlator HUD.</string>
+    <string name="hud_unavailable">N/A</string>
+    <string name="hud_cpu_app_label">CPU app</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kept separate from the virtual-control editor's three existing categories. -->
+    <string-array name="menu_binding_type_entries">
+        <item>Keyboard</item>
+        <item>Mouse</item>
+        <item>Gamepad</item>
+        <item>Winlator</item>
+    </string-array>
+</resources>

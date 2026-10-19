@@ -34,6 +34,8 @@ import com.winlator.xserver.XServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -61,6 +63,49 @@ public class InputControlsView extends View {
     private Timer mouseMoveTimer;
     private final PointF mouseMoveOffset = new PointF();
     private boolean showTouchscreenControls = true;
+    private final Set<Binding> activeBindings = new HashSet<>();
+    private final Set<Long> pressedMenuKeys = new HashSet<>();
+    private final Set<Long> pendingMenuReleases = new HashSet<>();
+    private Runnable onOpenMenu;
+
+    public void setOnOpenMenu(Runnable callback) {
+        onOpenMenu = callback;
+    }
+
+    /** Checked before game dispatch so the same configured button can also close the menu. */
+    public boolean handleMenuKeyEvent(KeyEvent event) {
+        long key = ((long)event.getDeviceId() << 32) | (event.getKeyCode() & 0xffffffffL);
+        if (event.getAction() == KeyEvent.ACTION_UP) {
+            boolean held = pressedMenuKeys.remove(key);
+            held |= pendingMenuReleases.remove(key);
+            if (held) return true;
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (event.getRepeatCount() == 0) pendingMenuReleases.remove(key);
+            else if (pendingMenuReleases.contains(key)) return true;
+        }
+        if (editMode || profile == null) return false;
+        ExternalController controller = profile.getController(event.getDeviceId());
+        ExternalControllerBinding mapping = controller != null ? controller.getControllerBinding(event.getKeyCode()) : null;
+        if (mapping == null || mapping.getBinding() != Binding.WINLATOR_MENU) return false;
+        if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled() && event.getRepeatCount() == 0 && pressedMenuKeys.add(key)) {
+            if (onOpenMenu != null) onOpenMenu.run();
+        }
+        return true;
+    }
+
+    public void onInputFocusLost() {
+        pendingMenuReleases.addAll(pressedMenuKeys);
+        pressedMenuKeys.clear();
+    }
+
+    public void releaseActiveInputs() {
+        for (Binding binding : new HashSet<>(activeBindings)) {
+            if (binding != Binding.WINLATOR_MENU && !binding.keycode.isCustomKey()) handleInputEvent(binding, false, 0);
+        }
+        activeBindings.clear();
+        mouseMoveOffset.set(0, 0);
+    }
 
     public InputControlsView(Context context) {
         super(context);
@@ -453,6 +498,11 @@ public class InputControlsView extends View {
     }
 
     public void handleInputEvent(Binding binding, boolean isActionDown, float offset) {
+        boolean freshPress = isActionDown ? activeBindings.add(binding) : activeBindings.remove(binding);
+        if (binding == Binding.WINLATOR_MENU) {
+            if (isActionDown && freshPress && onOpenMenu != null) onOpenMenu.run();
+            return;
+        }
         if (binding.isGamepad()) {
             WinHandler winHandler = xServer != null ? xServer.getWinHandler() : null;
             GamepadState state = profile.getGamepadState();

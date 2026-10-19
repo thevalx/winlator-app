@@ -11,14 +11,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <com.google.android.material.navigation.NavigationView
-        android:layout_width="wrap_content"
+    <FrameLayout
+        android:layout_width="420dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:id="@+id/NavigationView"
-        app:headerLayout="@layout/main_menu_header"
-        app:itemIconTint="?attr/colorAccent"
-        app:itemTextColor="?attr/colorPrimaryText"
-        android:background="?attr/colorSecondarySurface"
-        app:menu="@menu/xserver_menu"/>
+        android:id="@+id/InGameMenuContainer"
+        android:background="#070C15" />
 </androidx.drawerlayout.widget.DrawerLayout>

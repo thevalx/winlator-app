@@ -205,63 +205,71 @@ public class ExternalControllerBindingsActivity extends AppCompatActivity {
         }
 
         private void loadBindingSpinner(ViewHolder holder, final ExternalControllerBinding item) {
-            final Context $this = ExternalControllerBindingsActivity.this;
+            holder.bindingType.setOnItemSelectedListener(null);
+            holder.binding.setOnItemSelectedListener(null);
 
-            Runnable update = () -> {
-                String[] bindingEntries = null;
-                switch (holder.bindingType.getSelectedItemPosition()) {
-                    case 0:
-                        bindingEntries = Binding.keyboardBindingLabels();
-                        break;
-                    case 1:
-                        bindingEntries = Binding.mouseBindingLabels();
-                        break;
-                    case 2:
-                        bindingEntries = Binding.gamepadBindingLabels();
-                        break;
-                }
-
-                holder.binding.setAdapter(new ArrayAdapter<>($this, android.R.layout.simple_spinner_dropdown_item, bindingEntries));
-                AppUtils.setSpinnerSelectionFromValue(holder.binding, item.getBinding().toString());
-            };
+            Binding selectedBinding = item.getBinding();
+            final int[] selectedCategory = {selectedBinding.isWinlator() ? 3 :
+                selectedBinding.isGamepad() ? 2 : selectedBinding.isMouse() ? 1 : 0};
+            holder.bindingType.setSelection(selectedCategory[0], false);
+            loadBindingActions(holder, item, selectedCategory[0], false);
 
             holder.bindingType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override
                 public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    update.run();
+                    if (position != holder.bindingType.getSelectedItemPosition() || position == selectedCategory[0]) return;
+                    selectedCategory[0] = position;
+                    loadBindingActions(holder, item, position, true);
                 }
 
                 @Override
                 public void onNothingSelected(AdapterView<?> parent) {}
             });
+        }
 
-            Binding selectedBinding = item.getBinding();
-            if (selectedBinding.isKeyboard()) {
-                holder.bindingType.setSelection(0, false);
+        private void loadBindingActions(ViewHolder holder, ExternalControllerBinding item,
+                                        int category, boolean categoryChanged) {
+            String[] labels;
+            final Binding[] values;
+            switch (category) {
+                case 1:
+                    labels = Binding.mouseBindingLabels();
+                    values = Binding.mouseBindingValues();
+                    break;
+                case 2:
+                    labels = Binding.gamepadBindingLabels();
+                    values = Binding.gamepadBindingValues();
+                    break;
+                case 3:
+                    labels = Binding.winlatorBindingLabels();
+                    values = Binding.winlatorBindingValues();
+                    break;
+                default:
+                    labels = Binding.keyboardBindingLabels();
+                    values = Binding.keyboardBindingValues();
+                    break;
             }
-            else if (selectedBinding.isMouse()) {
-                holder.bindingType.setSelection(1, false);
+            holder.binding.setOnItemSelectedListener(null);
+            final ArrayAdapter<String> actionAdapter = new ArrayAdapter<>(
+                ExternalControllerBindingsActivity.this, android.R.layout.simple_spinner_dropdown_item, labels);
+            holder.binding.setAdapter(actionAdapter);
+            int selected = 0;
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == item.getBinding()) { selected = i; break; }
             }
-            else if (selectedBinding.isGamepad()) {
-                holder.bindingType.setSelection(2, false);
+            holder.binding.setSelection(selected, false);
+            // Rendering an existing row must never rewrite its saved mapping.
+            if (categoryChanged && values[selected] != item.getBinding()) {
+                item.setBinding(values[selected]);
+                profile.save();
             }
-
             holder.binding.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override
                 public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    Binding binding = Binding.NONE;
-                    switch (holder.bindingType.getSelectedItemPosition()) {
-                        case 0:
-                            binding = Binding.keyboardBindingValues()[position];
-                            break;
-                        case 1:
-                            binding = Binding.mouseBindingValues()[position];
-                            break;
-                        case 2:
-                            binding = Binding.gamepadBindingValues()[position];
-                            break;
-                    }
-
+                    if (parent.getAdapter() != actionAdapter ||
+                        holder.bindingType.getSelectedItemPosition() != category ||
+                        position < 0 || position >= values.length) return;
+                    Binding binding = values[position];
                     if (binding != item.getBinding()) {
                         item.setBinding(binding);
                         profile.save();
@@ -271,8 +279,6 @@ public class ExternalControllerBindingsActivity extends AppCompatActivity {
                 @Override
                 public void onNothingSelected(AdapterView<?> parent) {}
             });
-
-            update.run();
         }
     }
 
