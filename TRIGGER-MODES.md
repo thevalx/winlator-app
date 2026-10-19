@@ -45,6 +45,18 @@ cache and socket path macros use the fork's data directory:
 - `X11_SERVER_PATH` in `gladiorenderer/include/gladio.h`
 - `VORTEK_SERVER_PATH` in `vortekrenderer/include/vortek.h`
 
+The bundled guest runtime also contains absolute official rootfs paths. At archive
+extraction only, `RootFSPathRelocator` replaces the 36-byte prefix
+`/data/data/com.winlator/files/rootfs` with the equal-length
+`/data/data/com.winlator.trig/files/r`. A private `files/r -> rootfs` symlink resolves
+the relocated loader, Wine, graphics-client, font and configuration paths to this
+installation. Absolute archive symlink targets are relocated too. File sizes, ELF
+offsets, executable sections and all other bytes are preserved. The bundled archive
+files themselves stay identical to official. This is identity relocation, not a
+change to Wine, Box64, DXVK, Turnip or renderer algorithms/defaults; no hot-path
+translation is added. Like official Winlator, these paths assume Android's owner-user
+`/data/data` alias.
+
 These are identity path substitutions, with no renderer logic changes. Existing
 JNI `Java_com_winlator_*` symbols and manifest activity/service class names remain
 unchanged. The foreground service's existing private intent action is unchanged;
@@ -57,12 +69,15 @@ verifies APK signing and application identity, and uploads an artifact containin
 `Winlator-plus-trig.apk`, `SHA256SUMS.txt` and `apk-badging.txt`.
 It uses the official SDK/NDK/CMake versions and all official runtime assets.
 The debug signing key is cached between CI builds; retain the original APK/key
-when distributing subsequent test builds that should install as updates.
+when distributing subsequent test builds that should install as updates. The local
+cloud APK and GitHub Actions APK use separate debug keys, so use one build source
+consistently for updates; Android rejects an in-place update signed by another key.
 
 With the official Android build prerequisites installed:
 
 ```sh
 python3 tests/trigger_modes/run.py
+python3 tests/runtime_paths/run.py  # JDK and zstd required
 bash gradlew --no-daemon --max-workers=2 assembleDebug
 ```
 
@@ -70,8 +85,13 @@ The dependency-free regression harness compiles the actual `ExternalController`,
 `GamepadState`, `TriggerMode` and `Mathf` source against small Android event fixtures.
 It checks both trigger axis pairs, duplicate keys, both release orders, independent
 left/right travel, key-only Button mode, clamping, mode changes, ordinary buttons,
-virtual digital triggers and global/shortcut setting resolution. It does not
-replace an Android APK build or physical-controller testing.
+virtual digital triggers and global/shortcut setting resolution. The mapping/editor
+checks exercise the production event-consumer methods so axis-only triggers keep
+working in custom profiles and the binding editor independently of native slot mode.
+Runtime path checks cover stream boundaries, short reads, repeated relocation,
+symlinks and all 25 bundled runtime archives. They verify that only matching path
+bytes change and that ELF layouts and executable sections remain identical. These
+checks do not replace an Android APK build or physical-controller testing.
 
 ## Phone testing
 

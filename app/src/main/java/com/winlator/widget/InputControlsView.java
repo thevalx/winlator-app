@@ -24,6 +24,7 @@ import com.winlator.inputcontrols.ControlsProfile;
 import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.ExternalControllerBinding;
 import com.winlator.inputcontrols.GamepadState;
+import com.winlator.inputcontrols.TriggerMode;
 import com.winlator.math.Mathf;
 import com.winlator.winhandler.WinHandler;
 import com.winlator.xserver.Pointer;
@@ -308,6 +309,8 @@ public class InputControlsView extends View {
     public boolean onGenericMotionEvent(MotionEvent event) {
         if (!editMode && profile != null) {
             ExternalController controller = profile.getController(event.getDeviceId());
+            // Profile bindings use digital trigger presses, independently of native gamepad slots.
+            if (controller != null) controller.setTriggerType(TriggerMode.AS_BUTTON);
             if (controller != null && controller.updateStateFromMotionEvent(event)) {
                 GamepadState state = controller.getGamepadState();
                 ExternalControllerBinding controllerBinding;

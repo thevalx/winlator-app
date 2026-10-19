@@ -23,6 +23,13 @@ jobs:
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;24.0.8215888' 'cmake;3.22.1'
       - name: Trigger regression checks
         run: python3 tests/trigger_modes/run.py
+      - name: Runtime identity relocation checks
+        run: |
+          if ! command -v zstd >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y zstd
+          fi
+          python3 tests/runtime_paths/run.py
       - name: Preserve test APK signing key between builds
         uses: actions/cache@v4
         with:

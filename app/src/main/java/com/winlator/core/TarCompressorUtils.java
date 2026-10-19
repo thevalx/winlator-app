@@ -3,6 +3,8 @@ package com.winlator.core;
 import android.content.Context;
 import android.net.Uri;
 
+import com.winlator.BuildConfig;
+
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -27,6 +29,7 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class TarCompressorUtils {
+    private static final RootFSPathRelocator ROOTFS_PATH_RELOCATOR = new RootFSPathRelocator(BuildConfig.APPLICATION_ID);
     public enum Type {XZ, ZSTD}
 
     public interface OnExtractFileListener {
@@ -164,11 +167,11 @@ public abstract class TarCompressorUtils {
                 }
                 else {
                     if (entry.isSymbolicLink()) {
-                        FileUtils.symlink(entry.getLinkName(), file.getAbsolutePath());
+                        FileUtils.symlink(ROOTFS_PATH_RELOCATOR.relocateLink(entry.getLinkName()), file.getAbsolutePath());
                     }
                     else {
                         try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
-                            if (!StreamUtils.copy(tar, outStream)) return false;
+                            ROOTFS_PATH_RELOCATOR.copy(tar, outStream);
                         }
                     }
                 }

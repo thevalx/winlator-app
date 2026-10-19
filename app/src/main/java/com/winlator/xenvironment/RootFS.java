@@ -5,9 +5,12 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import com.winlator.core.FileUtils;
+import com.winlator.core.RootFSPathRelocator;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Locale;
 
 public class RootFS {
@@ -23,10 +26,24 @@ public class RootFS {
         this.rootDir = rootDir;
     }
 
-    public static RootFS find(Context context) {
+    public static synchronized RootFS find(Context context) {
         File legacyDir = new File(context.getFilesDir(), "imagefs");
         File rootDir = new File(context.getFilesDir(), "rootfs");
         if (legacyDir.isDirectory()) legacyDir.renameTo(rootDir);
+        // Official guest libraries contain a fixed-width rootfs prefix. The private alias
+        // lets extraction relocate that prefix without rebuilding or resizing the libraries.
+        Path alias = new File(context.getFilesDir(), RootFSPathRelocator.ROOTFS_ALIAS).toPath();
+        try {
+            if (Files.isSymbolicLink(alias)) {
+                if (!Files.readSymbolicLink(alias).toString().equals("rootfs")) {
+                    throw new IOException("Rootfs alias points to an unexpected location");
+                }
+            }
+            else Files.createSymbolicLink(alias, new File("rootfs").toPath());
+        }
+        catch (IOException e) {
+            throw new IllegalStateException("Unable to create private runtime path alias", e);
+        }
         return new RootFS(rootDir);
     }
 

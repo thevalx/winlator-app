@@ -34,6 +34,7 @@ import com.winlator.inputcontrols.ExternalController;
 import com.winlator.inputcontrols.ExternalControllerBinding;
 import com.winlator.inputcontrols.GamepadState;
 import com.winlator.inputcontrols.InputControlsManager;
+import com.winlator.inputcontrols.TriggerMode;
 import com.winlator.math.Mathf;
 
 public class ExternalControllerBindingsActivity extends AppCompatActivity {
@@ -137,6 +138,8 @@ public class ExternalControllerBindingsActivity extends AppCompatActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        // The binding editor detects trigger presses even on controllers without L2/R2 key events.
+        controller.setTriggerType(TriggerMode.AS_BUTTON);
         if (event.getDeviceId() == controller.getDeviceId() && controller.updateStateFromMotionEvent(event)) {
             GamepadState state = controller.getGamepadState();
             if (state.isPressed(ExternalController.IDX_BUTTON_L2)) updateControllerBinding(KeyEvent.KEYCODE_BUTTON_L2, Binding.NONE);
