@@ -67,7 +67,9 @@ the service is not exported.
 The `Winlator +trig test APK` workflow builds the `feat/trigger-modes` branch,
 verifies APK signing and application identity, and uploads an artifact containing
 `Winlator-plus-trig.apk`, `SHA256SUMS.txt` and `apk-badging.txt`.
-It uses the official SDK/NDK/CMake versions and all official runtime assets.
+After validation, the workflow publishes a GitHub prerelease with a direct APK
+download for phone browsers. It uses the runner's preinstalled Android SDK plus
+the official SDK/NDK/CMake versions and all official runtime assets.
 The debug signing key is cached between CI builds; retain the original APK/key
 when distributing subsequent test builds that should install as updates. The local
 cloud APK and GitHub Actions APK use separate debug keys, so use one build source
