@@ -1,0 +1,127 @@
+name: Back up retained test signing key
+
+on:
+  push:
+    branches: ['feat/trigger-modes']
+    paths:
+      - '.github/scripts/signing_backup.py'
+      - '.github/workflows/test-signing-backup.yml'
+  workflow_dispatch:
+    inputs:
+      delete_plaintext_cache:
+        description: 'Delete the plaintext test-key cache after the encrypted backup is verified'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winlator-trig-signing-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check secure backup password configuration
+        env:
+          TRIG_SIGNING_BACKUP_PASSWORD: ${{ secrets.TRIG_SIGNING_BACKUP_PASSWORD }}
+        run: python3 .github/scripts/signing_backup.py check-password
+      - name: Test backup encryption with random dummy data
+        run: python3 .github/scripts/signing_backup.py self-test
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.local/share/winlator-trig-signing
+          key: winlator-trig-signing-v2
+          fail-on-cache-miss: true
+      - name: Verify retained key and create encrypted backup
+        env:
+          TRIG_SIGNING_BACKUP_PASSWORD: ${{ secrets.TRIG_SIGNING_BACKUP_PASSWORD }}
+        shell: bash
+        run: |
+          umask 077
+          keystore="$HOME/.local/share/winlator-trig-signing/debug.keystore"
+          test -s "$keystore"
+          keytool -exportcert -keystore "$keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > "$RUNNER_TEMP/cached-certificate.txt"
+          diff .github/test-signing.sha256 "$RUNNER_TEMP/cached-certificate.txt"
+          python3 .github/scripts/signing_backup.py encrypt --input "$keystore" --output "$RUNNER_TEMP/Winlator-trig-signing-v2.enc"
+          python3 .github/scripts/signing_backup.py decrypt --input "$RUNNER_TEMP/Winlator-trig-signing-v2.enc" --output "$RUNNER_TEMP/roundtrip.keystore"
+          keytool -exportcert -keystore "$RUNNER_TEMP/roundtrip.keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > "$RUNNER_TEMP/restored-certificate.txt"
+          diff .github/test-signing.sha256 "$RUNNER_TEMP/restored-certificate.txt"
+      - name: Store encrypted backup in a dedicated draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if gh release view trig-signing-backup --repo "$REPOSITORY" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/backup-release-draft.txt"; then
+            test "$(cat "$RUNNER_TEMP/backup-release-draft.txt")" = true
+          else
+            gh release create trig-signing-backup --repo "$REPOSITORY" --target "$GITHUB_SHA" --draft --title 'Encrypted test signing backup' --notes 'Encrypted signing backup only. Keep this release as a draft; it contains no installable app.'
+          fi
+          gh release upload trig-signing-backup "$RUNNER_TEMP/Winlator-trig-signing-v2.enc" --repo "$REPOSITORY" --clobber
+      - name: Remove temporary decrypted key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/roundtrip.keystore"
+
+  verify:
+    needs: backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download encrypted backup on a fresh runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/signing-backup-verification"
+          gh release download trig-signing-backup --repo "$REPOSITORY" --pattern 'Winlator-trig-signing-v2.enc' --dir "$RUNNER_TEMP/signing-backup-verification"
+      - name: Restore privately and verify the signing certificate
+        env:
+          TRIG_SIGNING_BACKUP_PASSWORD: ${{ secrets.TRIG_SIGNING_BACKUP_PASSWORD }}
+        shell: bash
+        run: |
+          umask 077
+          python3 .github/scripts/signing_backup.py decrypt --input "$RUNNER_TEMP/signing-backup-verification/Winlator-trig-signing-v2.enc" --output "$RUNNER_TEMP/verified-backup.keystore"
+          keytool -exportcert -keystore "$RUNNER_TEMP/verified-backup.keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > "$RUNNER_TEMP/verified-backup-certificate.txt"
+          diff .github/test-signing.sha256 "$RUNNER_TEMP/verified-backup-certificate.txt"
+          echo 'Encrypted signing backup restored and certificate verified on a fresh runner.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary decrypted key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/verified-backup.keystore"
+
+  remove_plaintext_cache:
+    if: github.event_name == 'workflow_dispatch' && inputs.delete_plaintext_cache
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete only the original plaintext signing cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          gh cache list --repo "$REPOSITORY" --key winlator-trig-signing-v2 --ref refs/heads/feat/trigger-modes --json id,key --jq '.[] | select(.key == "winlator-trig-signing-v2") | .id' > "$RUNNER_TEMP/signing-cache-ids.txt"
+          while IFS= read -r cache_id; do
+            gh cache delete "$cache_id" --repo "$REPOSITORY"
+          done < "$RUNNER_TEMP/signing-cache-ids.txt"

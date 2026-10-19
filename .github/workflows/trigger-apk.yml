@@ -3,6 +3,10 @@ name: Winlator +trig test APK
 on:
   push:
     branches: ['feat/trigger-modes']
+    paths-ignore:
+      - '**/*.md'
+      - '.github/scripts/signing_backup.py'
+      - '.github/workflows/test-signing-backup.yml'
   workflow_dispatch:
 
 permissions:

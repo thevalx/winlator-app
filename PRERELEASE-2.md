@@ -2,8 +2,9 @@
 
 Version `11.2+trig.2` (version code 34). Java/JNI names remain `com.winlator`.
 The first prerelease signing key was not retained by the old workflow, so this
-version cannot update that installation directly. Keep the first installation
-and its data until an installation or backup plan has been chosen.
+version cannot update that installation directly. The selected installation path keeps `com.winlator.trig` and requires one backup
+and reinstall. Follow [the phone backup guide](UPDATING.md) before uninstalling.
+Subsequent v2 releases can update in place using the pinned v2 signing key.
 
 Builds now use an explicit signing-key location and verify the APK certificate
 against a committed public fingerprint. If the retained key is unavailable, the
