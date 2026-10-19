@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   build:
@@ -21,19 +20,19 @@ jobs:
           java-version: '21'
       - name: Preserve test APK signing key between builds
         id: signing_key
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
-          path: ~/.android/debug.keystore
-          key: winlator-trig-test-keystore-v1
-      - name: Record public signing diagnostics
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SIGNING_CACHE_HIT: ${{ steps.signing_key.outputs.cache-hit }}
-        run: python3 .github/scripts/signing_diagnostics.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: signing-diagnostics
-          path: SIGNING-DIAGNOSTICS.txt
+          path: ~/.local/share/winlator-trig-signing
+          key: winlator-trig-signing-v2
+          fail-on-cache-miss: true
+      - name: Verify the retained signing certificate
+        shell: bash
+        run: |
+          keystore="$HOME/.local/share/winlator-trig-signing/debug.keystore"
+          test -s "$keystore"
+          keytool -exportcert -keystore "$keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > retained-certificate.txt
+          diff .github/test-signing.sha256 retained-certificate.txt
+          echo "WINLATOR_TEST_KEYSTORE=$keystore" >> "$GITHUB_ENV"
       - name: Use the runner Android SDK
         shell: bash
         run: |
@@ -59,14 +58,15 @@ jobs:
       - name: Android UI tests
         run: bash gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx4g :app:testDebugUnitTest
       - name: Build APK with official runtime assets and native sources
-        run: bash gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx4g assembleDebug
+        run: bash gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx4g -Pandroid.injected.signing.store.file="$WINLATOR_TEST_KEYSTORE" -Pandroid.injected.signing.store.password=android -Pandroid.injected.signing.key.alias=androiddebugkey -Pandroid.injected.signing.key.password=android assembleDebug
       - name: Verify identity and APK signature
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" > signing-certificate.txt
-          grep -F 'Signer #1 certificate SHA-256 digest: 545e39f6a4d31cbf8c4bf21636d629a1c5f1c5ea2367b920f0caf64f17208ba8' signing-certificate.txt
+          fingerprint="$(cat .github/test-signing.sha256)"
+          grep -F "Signer #1 certificate SHA-256 digest: $fingerprint" signing-certificate.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > apk-badging.txt
           grep -F "package: name='com.winlator.trig'" apk-badging.txt
           grep -F "application-label:'Winlator +trig'" apk-badging.txt
@@ -101,7 +101,7 @@ jobs:
           sha256sum --check SHA256SUMS.txt
           tag="trig-test-${COMMIT:0:7}"
           cat > release-notes.md <<'NOTES'
-          Winlator +trig prerelease 2 for ARM64 Android. Updates the first +trig release and remains separate from official Winlator.
+          Winlator +trig prerelease 2 for ARM64 Android. The first release's signing key was not retained; this APK cannot update that installation directly.
 
           Download Winlator-plus-trig.apk below directly on your phone.
 
@@ -116,19 +116,3 @@ jobs:
           else
             gh release create "$tag" Winlator-plus-trig.apk SHA256SUMS.txt apk-badging.txt --repo "$REPOSITORY" --target "$COMMIT" --prerelease --title "Winlator +trig prerelease 2 (${COMMIT:0:7})" --notes-file release-notes.md
           fi
-
-  signing_diagnostics:
-    needs: build
-    if: always()
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: signing-diagnostics
-      - name: Make public certificate diagnostics readable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: gh release upload trig-test-2a7dc9c SIGNING-DIAGNOSTICS.txt --repo "$REPOSITORY" --clobber

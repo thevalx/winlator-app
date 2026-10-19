@@ -1,0 +1,87 @@
+name: Prepare retained test signing key
+on:
+  push:
+    branches: ['feat/trigger-modes']
+    paths: ['.github/workflows/bootstrap-test-signing.yml']
+permissions:
+  contents: read
+concurrency:
+  group: winlator-trig-signing-bootstrap
+  cancel-in-progress: false
+jobs:
+  signing:
+    runs-on: ubuntu-24.04
+    outputs:
+      certificate: ${{ steps.certificate.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/cache/restore@v4
+        id: signing
+        with:
+          path: ~/.local/share/winlator-trig-signing
+          key: winlator-trig-signing-v2
+      - name: Prepare and inspect the test certificate
+        id: certificate
+        shell: bash
+        run: |
+          directory="$HOME/.local/share/winlator-trig-signing"
+          mkdir -p "$directory"
+          if [ -f .github/test-signing.sha256 ] && [ ! -f "$directory/debug.keystore" ]; then
+            echo "::error::The pinned test signing key is missing; restore it before rebuilding."
+            exit 1
+          fi
+          if [ ! -f "$directory/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$directory/debug.keystore" -storetype JKS -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Winlator +trig Test, O=Winlator +trig, C=US'
+            chmod 600 "$directory/debug.keystore"
+          fi
+          keytool -exportcert -keystore "$directory/debug.keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > TEST-SIGNING-CERTIFICATE.txt
+          echo "sha256=$(cat TEST-SIGNING-CERTIFICATE.txt)" >> "$GITHUB_OUTPUT"
+          if [ -f .github/test-signing.sha256 ]; then
+            diff .github/test-signing.sha256 TEST-SIGNING-CERTIFICATE.txt
+          fi
+      - uses: actions/cache/save@v4
+        if: steps.signing.outputs.cache-hit != 'true'
+        with:
+          path: ~/.local/share/winlator-trig-signing
+          key: winlator-trig-signing-v2
+
+  verify:
+    needs: signing
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.local/share/winlator-trig-signing
+          key: winlator-trig-signing-v2
+          fail-on-cache-miss: true
+      - name: Verify the key was retained on a fresh runner
+        env:
+          EXPECTED_CERTIFICATE: ${{ needs.signing.outputs.certificate }}
+        shell: bash
+        run: |
+          keytool -exportcert -keystore "$HOME/.local/share/winlator-trig-signing/debug.keystore" -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1 > TEST-SIGNING-CERTIFICATE.txt
+          test "$(cat TEST-SIGNING-CERTIFICATE.txt)" = "$EXPECTED_CERTIFICATE"
+      - name: Publish only the public certificate fingerprint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          gh release upload trig-test-2a7dc9c TEST-SIGNING-CERTIFICATE.txt --repo "$REPOSITORY" --clobber
+          cat > withdrawal.md <<'NOTES'
+          This prerelease APK was withdrawn after signature verification found that it cannot update prerelease 1. The first release remains available at tag trig-test-0d486df. A corrected v2 installation option is being prepared.
+          NOTES
+          gh release edit trig-test-2a7dc9c --repo "$REPOSITORY" --title 'Withdrawn: Winlator +trig prerelease 2 signing mismatch' --notes-file withdrawal.md
+          if gh release view trig-test-2a7dc9c --repo "$REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq Winlator-plus-trig.apk; then
+            gh release delete-asset trig-test-2a7dc9c Winlator-plus-trig.apk --repo "$REPOSITORY" --yes
+          fi

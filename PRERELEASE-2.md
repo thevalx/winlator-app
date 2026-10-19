@@ -1,8 +1,14 @@
 # Winlator +trig prerelease 2
 
-Updates the working first release as `com.winlator.trig`, version `11.2+trig.2`
-(version code 34). Java/JNI names remain `com.winlator`. Use the GitHub release APK
-for an in-place update; its signing key is retained from the first GitHub build.
+Version `11.2+trig.2` (version code 34). Java/JNI names remain `com.winlator`.
+The first prerelease signing key was not retained by the old workflow, so this
+version cannot update that installation directly. Keep the first installation
+and its data until an installation or backup plan has been chosen.
+
+Builds now use an explicit signing-key location and verify the APK certificate
+against a committed public fingerprint. If the retained key is unavailable, the
+workflow stops rather than publishing an APK with a replacement key. GitHub Actions
+caches can expire; the cache is not a permanent key backup.
 
 ## In-game menu and HUD
 
